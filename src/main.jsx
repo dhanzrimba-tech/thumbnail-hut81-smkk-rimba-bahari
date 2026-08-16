@@ -16,6 +16,7 @@ import "./style.css";
 
 const DESIGN_W = 1672;
 const DESIGN_H = 941;
+const DESIGN_URL = "/design.png?v=20260817-03";
 const PHOTO = { x: 20, y: 260, w: 500, h: 520 };
 
 function loadImage(src) {
@@ -63,7 +64,7 @@ async function makeThumbnail(file) {
     cutoutUrl = URL.createObjectURL(cutoutBlob);
 
     const [design, cutout] = await Promise.all([
-      loadImage("/design.png"),
+      loadImage(DESIGN_URL),
       loadImage(cutoutUrl),
     ]);
 
@@ -110,29 +111,9 @@ async function makeThumbnail(file) {
     const ctx = out.getContext("2d");
     ctx.drawImage(design, 0, 0, DESIGN_W, DESIGN_H);
 
-    // Area behind the person: use the forest part of the design,
-    // without the original grey silhouette.
-    ctx.save();
-    ctx.beginPath();
-    ctx.moveTo(24, 305);
-    ctx.quadraticCurveTo(120, 250, 260, 270);
-    ctx.quadraticCurveTo(440, 245, 505, 330);
-    ctx.lineTo(500, 755);
-    ctx.quadraticCurveTo(350, 805, 170, 795);
-    ctx.quadraticCurveTo(60, 785, 24, 730);
-    ctx.closePath();
-    ctx.clip();
-
-    ctx.globalAlpha = 0.98;
-    ctx.drawImage(design, 0, 0, 600, 420, 0, 250, 520, 520);
-
-    const grad = ctx.createLinearGradient(0, 250, 520, 780);
-    grad.addColorStop(0, "rgba(4,35,20,0.08)");
-    grad.addColorStop(0.72, "rgba(2,27,15,0.34)");
-    grad.addColorStop(1, "rgba(2,18,10,0.62)");
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 250, 520, 540);
-    ctx.restore();
+    // IMPORTANT: do not redraw the old placeholder area here.
+    // The current /public/design.png is the source of truth, so the
+    // newest forest/tree artwork remains visible exactly as designed.
 
     // Soft green halo.
     ctx.save();
@@ -193,7 +174,7 @@ async function makeThumbnail(file) {
 }
 
 function App() {
-  const [preview, setPreview] = useState("/design.png");
+  const [preview, setPreview] = useState(DESIGN_URL);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(
     "Pilih foto selfie atau ambil foto dari galeri."
@@ -250,7 +231,7 @@ function App() {
   }
 
   function download() {
-    if (preview === "/design.png" || busy) return;
+    if (preview === DESIGN_URL || busy) return;
 
     const a = document.createElement("a");
     a.href = preview;
@@ -324,7 +305,7 @@ function App() {
           <button
             className="download"
             onClick={download}
-            disabled={preview === "/design.png" || busy}
+            disabled={preview === DESIGN_URL || busy}
             type="button"
           >
             <Download />
