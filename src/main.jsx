@@ -16,7 +16,7 @@ import "./style.css";
 
 const DESIGN_W = 1672;
 const DESIGN_H = 941;
-const PHOTO = { x: 20, y: 260, w: 500, h: 520 };
+const PHOTO = { x: -20, y: 205, w: 540, h: 600 };
 
 function loadImage(src) {
   return new Promise((resolve, reject) => {
@@ -84,9 +84,12 @@ async function makeThumbnail(file) {
     const bw = bounds.maxX - bounds.minX + 1;
     const bh = bounds.maxY - bounds.minY + 1;
 
-    const targetW = PHOTO.w * 0.88;
-    const targetH = PHOTO.h * 0.94;
-    const scale = Math.min(targetW / bw, targetH / bh);
+    // Make the person substantially larger, matching the approved
+    // reference thumbnail: head near the upper-left forest area and
+    // torso extending down toward the ribbon.
+    const targetW = PHOTO.w * 1.02;
+    const targetH = PHOTO.h * 1.02;
+    const scale = Math.max(targetW / bw, targetH / bh);
 
     const drawW = bw * scale;
     const drawH = bh * scale;
@@ -100,7 +103,7 @@ async function makeThumbnail(file) {
       PHOTO.y +
       PHOTO.h -
       drawH -
-      10 -
+      4 -
       bounds.minY * scale;
 
     const out = document.createElement("canvas");
@@ -110,38 +113,44 @@ async function makeThumbnail(file) {
     const ctx = out.getContext("2d");
     ctx.drawImage(design, 0, 0, DESIGN_W, DESIGN_H);
 
-    // Area behind the person: use the forest part of the design,
-    // without the original grey silhouette.
+    // Rebuild the portrait area with clean forest/building sections from
+    // the supplied design. IMPORTANT: do not copy the top-left of the
+    // design because that area contains the school logo.
     ctx.save();
     ctx.beginPath();
-    ctx.moveTo(24, 305);
-    ctx.quadraticCurveTo(120, 250, 260, 270);
-    ctx.quadraticCurveTo(440, 245, 505, 330);
-    ctx.lineTo(500, 755);
-    ctx.quadraticCurveTo(350, 805, 170, 795);
-    ctx.quadraticCurveTo(60, 785, 24, 730);
+    ctx.moveTo(0, 265);
+    ctx.quadraticCurveTo(90, 205, 260, 225);
+    ctx.quadraticCurveTo(455, 205, 525, 285);
+    ctx.lineTo(520, 790);
+    ctx.quadraticCurveTo(370, 825, 170, 810);
+    ctx.quadraticCurveTo(55, 800, 0, 745);
     ctx.closePath();
     ctx.clip();
 
-    ctx.globalAlpha = 0.98;
-    ctx.drawImage(design, 0, 0, 600, 420, 0, 250, 520, 520);
+    // Upper background: mountain/forest area, deliberately taken from
+    // the middle of the design so the school logo never appears here.
+    ctx.drawImage(
+      design,
+      500, 0, 520, 330,
+      0, 205, 540, 350
+    );
 
-    const grad = ctx.createLinearGradient(0, 250, 520, 780);
-    grad.addColorStop(0, "rgba(4,35,20,0.08)");
-    grad.addColorStop(0.72, "rgba(2,27,15,0.34)");
-    grad.addColorStop(1, "rgba(2,18,10,0.62)");
-    ctx.fillStyle = grad;
-    ctx.fillRect(0, 250, 520, 540);
-    ctx.restore();
+    // Lower background: school/trees area, again avoiding the logo.
+    ctx.drawImage(
+      design,
+      500, 300, 520, 450,
+      0, 555, 540, 255
+    );
 
-    // Soft green halo.
-    ctx.save();
-    ctx.shadowColor = "rgba(0,0,0,.45)";
-    ctx.shadowBlur = 24;
-    ctx.fillStyle = "rgba(13,64,39,.38)";
-    ctx.beginPath();
-    ctx.ellipse(260, 540, 205, 235, 0, 0, Math.PI * 2);
-    ctx.fill();
+    // Blend the two sections so the portrait area looks like one natural
+    // forest scene.
+    const forestBlend = ctx.createLinearGradient(0, 210, 0, 810);
+    forestBlend.addColorStop(0, "rgba(5,35,18,0.02)");
+    forestBlend.addColorStop(0.55, "rgba(3,32,17,0.08)");
+    forestBlend.addColorStop(1, "rgba(1,22,11,0.36)");
+    ctx.fillStyle = forestBlend;
+    ctx.fillRect(0, 205, 540, 605);
+
     ctx.restore();
 
     // Person cutout.
@@ -160,30 +169,9 @@ async function makeThumbnail(file) {
     );
     ctx.restore();
 
-    // Decorative dashed top edge.
-    ctx.save();
-    ctx.strokeStyle = "rgba(255,255,255,.85)";
-    ctx.lineWidth = 5;
-    ctx.setLineDash([18, 10]);
-    ctx.beginPath();
-    ctx.moveTo(28, 312);
-    ctx.quadraticCurveTo(245, 250, 500, 315);
-    ctx.stroke();
-    ctx.restore();
-
-    // Subtle vignette.
-    const vignette = ctx.createRadialGradient(
-      260,
-      520,
-      120,
-      260,
-      520,
-      330
-    );
-    vignette.addColorStop(0, "rgba(0,0,0,0)");
-    vignette.addColorStop(1, "rgba(0,20,10,.32)");
-    ctx.fillStyle = vignette;
-    ctx.fillRect(20, 260, 500, 520);
+    // Keep the portrait area frameless: no white/grey box and no
+    // dashed border. The supplied forest/building background should
+    // continue naturally behind the person.
 
     return out.toDataURL("image/png", 1);
   } finally {
@@ -196,7 +184,7 @@ function App() {
   const [preview, setPreview] = useState("/design.png");
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState(
-    "Pilih foto selfie atau ambil foto dari galeri."
+    "Pilih foto selfie atau foto dari galeri."
   );
   const [error, setError] = useState("");
 
