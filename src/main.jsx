@@ -1,24 +1,18 @@
+// MAIN.JSX UPDATE — Thumbnail HUT ke-81
+// Fitur baru: AMBIL FOTO SELFIE + PILIH DARI GALERI.
+// Tempel seluruh isi file ini menggantikan src/main.jsx.
+
 import React, { useEffect, useRef, useState } from "react";
 import { createRoot } from "react-dom/client";
 import { removeBackground } from "@imgly/background-removal";
 import {
-  Camera,
-  Download,
-  ImagePlus,
-  Scissors,
-  Sparkles,
-  UserRound,
-  ShieldCheck,
-  CheckCircle2,
-  Loader2
+  Camera, Download, ImagePlus, Scissors, Sparkles, UserRound,
+  ShieldCheck, CheckCircle2, Loader2
 } from "lucide-react";
 import "./style.css";
 
 const DESIGN_W = 1672;
 const DESIGN_H = 941;
-
-// Photo area intentionally matches the left portrait zone of the supplied design.
-// The grey silhouette in the original is covered with a forest-toned panel first.
 const PHOTO = { x: 20, y: 260, w: 500, h: 520 };
 
 function loadImage(src) {
@@ -45,42 +39,37 @@ function alphaBounds(canvas) {
       }
     }
   }
-  if (maxX < 0) return null;
-  return { minX, minY, maxX, maxY };
+  return maxX < 0 ? null : { minX, minY, maxX, maxY };
 }
 
 async function makeThumbnail(file) {
   const sourceUrl = URL.createObjectURL(file);
   try {
-    // Browser-only background removal. The selfie is not uploaded to our server.
     const cutoutBlob = await removeBackground(sourceUrl, {
       output: { format: "image/png", type: "foreground" }
     });
-
     const cutoutUrl = URL.createObjectURL(cutoutBlob);
+
     const [design, cutout] = await Promise.all([
       loadImage("/design.png"),
       loadImage(cutoutUrl)
     ]);
 
-    // Prepare transparent cutout and find its real foreground bounds.
     const work = document.createElement("canvas");
     work.width = cutout.naturalWidth || cutout.width;
     work.height = cutout.naturalHeight || cutout.height;
     const wctx = work.getContext("2d");
     wctx.drawImage(cutout, 0, 0);
+
     const bounds = alphaBounds(work) || {
       minX: 0, minY: 0, maxX: work.width - 1, maxY: work.height - 1
     };
-
     const bw = bounds.maxX - bounds.minX + 1;
     const bh = bounds.maxY - bounds.minY + 1;
 
-    // Fit head + upper body into the forestry-themed photo panel.
     const targetW = PHOTO.w * 0.88;
     const targetH = PHOTO.h * 0.94;
     const scale = Math.min(targetW / bw, targetH / bh);
-
     const drawW = bw * scale;
     const drawH = bh * scale;
     const dx = PHOTO.x + (PHOTO.w - drawW) / 2 - bounds.minX * scale;
@@ -93,7 +82,6 @@ async function makeThumbnail(file) {
 
     ctx.drawImage(design, 0, 0, DESIGN_W, DESIGN_H);
 
-    // Cover the original grey silhouette with a forest-toned panel.
     ctx.save();
     ctx.beginPath();
     ctx.moveTo(24, 305);
@@ -105,11 +93,9 @@ async function makeThumbnail(file) {
     ctx.closePath();
     ctx.clip();
 
-    // Use a clean forest section from the supplied design as the new background.
     ctx.globalAlpha = 0.98;
     ctx.drawImage(design, 0, 0, 600, 420, 0, 250, 520, 520);
 
-    // Dark-green blending overlay so the portrait integrates with the design.
     const grad = ctx.createLinearGradient(0, 250, 520, 780);
     grad.addColorStop(0, "rgba(4,35,20,0.08)");
     grad.addColorStop(0.72, "rgba(2,27,15,0.34)");
@@ -118,7 +104,6 @@ async function makeThumbnail(file) {
     ctx.fillRect(0, 250, 520, 540);
     ctx.restore();
 
-    // Soft forest-green halo behind the person.
     ctx.save();
     ctx.shadowColor = "rgba(0,0,0,.45)";
     ctx.shadowBlur = 24;
@@ -128,17 +113,14 @@ async function makeThumbnail(file) {
     ctx.fill();
     ctx.restore();
 
-    // Draw the removed-background selfie.
     ctx.save();
     ctx.imageSmoothingEnabled = true;
     ctx.drawImage(
-      work,
-      0, 0, work.width, work.height,
+      work, 0, 0, work.width, work.height,
       dx, dy, work.width * scale, work.height * scale
     );
     ctx.restore();
 
-    // Forestry/patriotic finishing accents around the photo.
     ctx.save();
     ctx.strokeStyle = "rgba(255,255,255,.85)";
     ctx.lineWidth = 5;
@@ -149,7 +131,6 @@ async function makeThumbnail(file) {
     ctx.stroke();
     ctx.restore();
 
-    // Add a subtle dark vignette only over the photo zone.
     const vignette = ctx.createRadialGradient(260, 520, 120, 260, 520, 330);
     vignette.addColorStop(0, "rgba(0,0,0,0)");
     vignette.addColorStop(1, "rgba(0,20,10,.32)");
@@ -166,27 +147,52 @@ async function makeThumbnail(file) {
 function App() {
   const [preview, setPreview] = useState("/design.png");
   const [busy, setBusy] = useState(false);
-  const [message, setMessage] = useState("Pilih foto selfie dengan wajah dan badan bagian atas terlihat jelas.");
+  const [message, setMessage] = useState(
+    "Pilih foto selfie atau foto dari galeri dengan wajah dan badan bagian atas terlihat jelas."
+  );
   const [error, setError] = useState("");
-  const inputRef = useRef(null);
+
+  // Dua input sengaja dipisahkan:
+  // kamera memakai capture="user", sedangkan galeri TIDAK memakai capture.
+  const cameraInputRef = useRef(null);
+  const galleryInputRef = useRef(null);
 
   useEffect(() => {
     document.title = "Thumbnail HUT ke-81 — SMK Kehutanan Rimba Bahari";
   }, []);
 
-  async function handleFile(e) {
+  async function handleFile(e, source = "foto") {
     const file = e.target.files?.[0];
     if (!file) return;
+
+    if (!file.type.startsWith("image/")) {
+      setError("File yang dipilih harus berupa gambar.");
+      setMessage("");
+      e.target.value = "";
+      return;
+    }
+
     setBusy(true);
     setError("");
-    setMessage("Sedang memotong foto dan menghapus background di perangkat Anda...");
+    setMessage(
+      source === "galeri"
+        ? "Foto dari galeri sedang diproses. Background akan dihapus otomatis..."
+        : "Foto selfie sedang diproses. Background akan dihapus otomatis..."
+    );
+
     try {
       const result = await makeThumbnail(file);
       setPreview(result);
-      setMessage("Berhasil! Foto sudah menyatu dengan desain. Silakan download.");
+      setMessage(
+        source === "galeri"
+          ? "Berhasil! Foto dari galeri sudah menyatu dengan desain. Silakan download."
+          : "Berhasil! Foto selfie sudah menyatu dengan desain. Silakan download."
+      );
     } catch (err) {
       console.error(err);
-      setError("Gagal memproses selfie. Coba foto lain dengan wajah dan badan bagian atas terlihat jelas.");
+      setError(
+        "Gagal memproses foto. Coba foto lain dengan wajah dan badan bagian atas terlihat jelas."
+      );
       setMessage("");
     } finally {
       setBusy(false);
@@ -215,33 +221,65 @@ function App() {
           </div>
 
           <p className="desc">
-            Buat thumbnail pribadi untuk guru dan siswa. Pilih foto selfie —
-            sistem otomatis memotong foto, menghapus background, lalu
-            menempatkannya pada desain kehutanan.
+            Buat thumbnail pribadi untuk guru dan siswa. Pilih foto selfie
+            atau foto dari galeri. Sistem otomatis memotong foto, menghapus
+            background, lalu menempatkannya pada desain kehutanan.
           </p>
 
-          <button className="primary" onClick={() => inputRef.current?.click()} disabled={busy}>
-            {busy ? <Loader2 className="spin" /> : <Camera />}
-            {busy ? "SEDANG MEMPROSES..." : "PILIH FOTO SELFIE"}
-          </button>
+          {/* DUA PILIHAN: KAMERA DAN GALERI */}
+          <div className="photo-actions">
+            <button
+              className="primary"
+              onClick={() => cameraInputRef.current?.click()}
+              disabled={busy}
+            >
+              {busy ? <Loader2 className="spin" /> : <Camera />}
+              {busy ? "SEDANG MEMPROSES..." : "AMBIL FOTO SELFIE"}
+            </button>
 
+            <button
+              className="gallery"
+              onClick={() => galleryInputRef.current?.click()}
+              disabled={busy}
+            >
+              {busy ? <Loader2 className="spin" /> : <ImagePlus />}
+              PILIH DARI GALERI
+            </button>
+          </div>
+
+          {/* KAMERA: memprioritaskan kamera depan di HP */}
           <input
-            ref={inputRef}
+            ref={cameraInputRef}
             type="file"
             accept="image/*"
             capture="user"
-            onChange={handleFile}
+            onChange={(e) => handleFile(e, "selfie")}
             hidden
           />
 
-          <button className="download" onClick={download} disabled={preview === "/design.png" || busy}>
+          {/* GALERI: tanpa capture agar foto tersimpan bisa dipilih */}
+          <input
+            ref={galleryInputRef}
+            type="file"
+            accept="image/*"
+            onChange={(e) => handleFile(e, "galeri")}
+            hidden
+          />
+
+          <button
+            className="download"
+            onClick={download}
+            disabled={preview === "/design.png" || busy}
+          >
             <Download />
             DOWNLOAD THUMBNAIL
           </button>
 
           <div className="privacy">
             <ShieldCheck />
-            <span>Foto diproses langsung di browser. Foto tidak dikirim ke server aplikasi.</span>
+            <span>
+              Foto diproses langsung di browser. Foto tidak dikirim ke server aplikasi.
+            </span>
           </div>
 
           <div className="tips">
@@ -249,7 +287,7 @@ function App() {
             <p><CheckCircle2 /> Gunakan foto dengan wajah dan badan bagian atas terlihat</p>
             <p><CheckCircle2 /> Cahaya cukup dan wajah tidak tertutup</p>
             <p><CheckCircle2 /> Kamera fokus dan foto tidak terlalu jauh</p>
-            <p><CheckCircle2 /> Hindari background yang terlalu ramai</p>
+            <p><CheckCircle2 /> Background yang ramai tetap dapat diproses otomatis</p>
           </div>
 
           {error && <div className="error">❌ {error}</div>}
@@ -269,7 +307,8 @@ function App() {
 
       <section className="steps">
         {[
-          [ImagePlus, "Pilih Foto", "Pilih foto selfie dari perangkat Anda"],
+          [Camera, "Selfie", "Ambil foto langsung menggunakan kamera perangkat"],
+          [ImagePlus, "Galeri", "Pilih foto yang sudah tersimpan di perangkat"],
           [Scissors, "Otomatis Crop", "Sistem menyesuaikan posisi foto"],
           [Sparkles, "Hapus Background", "Background dihapus otomatis"],
           [UserRound, "Masukkan Desain", "Foto ditempatkan pada desain kehutanan"],
