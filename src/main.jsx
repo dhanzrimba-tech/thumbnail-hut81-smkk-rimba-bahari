@@ -16,7 +16,7 @@ import "./style.css";
 
 const DESIGN_W = 1672;
 const DESIGN_H = 941;
-const DESIGN_URL = "/design.png?v=20260817-03";
+const DESIGN_URL = "/design.png?v=20260817-04";
 const PHOTO = { x: 20, y: 260, w: 500, h: 520 };
 
 function loadImage(src) {
@@ -26,6 +26,28 @@ function loadImage(src) {
     img.onerror = reject;
     img.src = src;
   });
+}
+
+const ALPHA_CUTOFF = 28;
+
+function cleanTransparentHaze(canvas) {
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  const data = imageData.data;
+
+  // Background-removal models can leave very faint alpha pixels over a
+  // rectangular area. Those pixels are invisible on white, but can look like
+  // a translucent frame when composited over the dark-green thumbnail.
+  for (let i = 3; i < data.length; i += 4) {
+    if (data[i] <= ALPHA_CUTOFF) {
+      data[i - 3] = 0;
+      data[i - 2] = 0;
+      data[i - 1] = 0;
+      data[i] = 0;
+    }
+  }
+
+  ctx.putImageData(imageData, 0, 0);
 }
 
 function alphaBounds(canvas) {
@@ -40,7 +62,7 @@ function alphaBounds(canvas) {
 
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
-      if (data[(y * width + x) * 4 + 3] > 18) {
+      if (data[(y * width + x) * 4 + 3] > ALPHA_CUTOFF) {
         minX = Math.min(minX, x);
         maxX = Math.max(maxX, x);
         minY = Math.min(minY, y);
@@ -74,6 +96,7 @@ async function makeThumbnail(file) {
 
     const wctx = work.getContext("2d");
     wctx.drawImage(cutout, 0, 0);
+    cleanTransparentHaze(work);
 
     const bounds = alphaBounds(work) || {
       minX: 0,
@@ -115,19 +138,16 @@ async function makeThumbnail(file) {
     // The current /public/design.png is the source of truth, so the
     // newest forest/tree artwork remains visible exactly as designed.
 
-    // Soft green halo.
-    ctx.save();
-    ctx.shadowColor = "rgba(0,0,0,.45)";
-    ctx.shadowBlur = 24;
-    ctx.fillStyle = "rgba(13,64,39,.38)";
-    ctx.beginPath();
-    ctx.ellipse(260, 540, 205, 235, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-
-    // Person cutout.
+    // Person cutout only. Do not draw any rectangular overlay, vignette,
+    // dashed frame, or translucent placeholder on top of the uploaded photo.
+    // A silhouette shadow is safe because it follows the cutout alpha only.
     ctx.save();
     ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = "high";
+    ctx.shadowColor = "rgba(0,0,0,.38)";
+    ctx.shadowBlur = 20;
+    ctx.shadowOffsetX = 0;
+    ctx.shadowOffsetY = 8;
     ctx.drawImage(
       work,
       0,
@@ -140,31 +160,6 @@ async function makeThumbnail(file) {
       work.height * scale
     );
     ctx.restore();
-
-    // Decorative dashed top edge.
-    ctx.save();
-    ctx.strokeStyle = "rgba(255,255,255,.85)";
-    ctx.lineWidth = 5;
-    ctx.setLineDash([18, 10]);
-    ctx.beginPath();
-    ctx.moveTo(28, 312);
-    ctx.quadraticCurveTo(245, 250, 500, 315);
-    ctx.stroke();
-    ctx.restore();
-
-    // Subtle vignette.
-    const vignette = ctx.createRadialGradient(
-      260,
-      520,
-      120,
-      260,
-      520,
-      330
-    );
-    vignette.addColorStop(0, "rgba(0,0,0,0)");
-    vignette.addColorStop(1, "rgba(0,20,10,.32)");
-    ctx.fillStyle = vignette;
-    ctx.fillRect(20, 260, 500, 520);
 
     return out.toDataURL("image/png", 1);
   } finally {

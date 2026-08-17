@@ -25,3 +25,10 @@ Versi ini memperbaiki alur selfie:
 Fitur remove-background memakai `@imgly/background-removal` dan berjalan di browser. Pada pemakaian pertama, model AI perlu diunduh sehingga proses pertama bisa lebih lama. Setelah itu biasanya lebih cepat.
 
 Jangan hapus `public/design.png` karena itu adalah desain thumbnail yang digunakan aplikasi.
+
+
+## Perbaikan 17 Agustus 2026
+- Menghapus vignette persegi transparan pada area foto.
+- Menghapus garis putus-putus dekoratif yang sebelumnya ikut tercetak.
+- Menghapus halo/background transparan tambahan di area foto.
+- Foto hasil upload sekarang digambar sebagai cutout saja dengan shadow mengikuti siluet, sehingga tidak menimbulkan bingkai transparan pada hasil download/cetak.
